@@ -2,12 +2,48 @@
 @import "./theme.css";
 @import "./font.css";
 
+@keyframes shine-badge {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 @layer base {
   html {
-    @apply text-foreground bg-background font-dmSans scroll-smooth font-normal antialiased;
+    @apply text-foreground bg-background scroll-smooth font-normal antialiased;
+    font-family: var(--font-body);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+  }
+
+  .font-heading {
+    font-family: var(--font-heading);
+    font-weight: 700;
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+  }
+
+  .font-accent {
+    font-family: var(--font-accent);
+    font-weight: 600;
+    color: var(--color-emerald-health);
+  }
+}
+
+@layer utilities {
+  .animate-shine-badge {
+    animation: shine-badge 5s linear infinite;
   }
 }

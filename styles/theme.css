@@ -1,6 +1,22 @@
 @theme inline {
-  --color-background: #111111;
-  --color-foreground: #fafafa;
+  /* Color Palette - SadarSehat */
+  --color-emerald-health: #0BB586;
+  --color-teal-deep: #006D77;
+  --color-soft-mint: #B2F2E8;
+  --color-warm-sand: #F2EDE4;
+  --color-alert-orange: #FF914D;
 
-  --font-dmSans: "DM-Sans", sans-serif;
+  /* Background & Foreground */
+  --color-background: #ffffff;
+  --color-foreground: #1a1a1a;
+
+  /* Typography - Font Families */
+  --font-heading: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Source Sans 3", sans-serif;
+  --font-accent: "Source Sans 3", sans-serif;
+  
+  /* Font Family Utilities */
+  --font-family-heading: var(--font-heading);
+  --font-family-body: var(--font-body);
+  --font-family-accent: var(--font-accent);
 }

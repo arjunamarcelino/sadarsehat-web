@@ -1,7 +1,9 @@
-export default function HomePage() {
+import { Hero } from "@/app/_components/home/Hero";
+
+export default function Home() {
   return (
-    <main className="flex h-screen flex-col justify-end p-6 text-5xl font-bold uppercase lg:text-9xl">
-      Frontend <br /> Starter kit
+    <main>
+      <Hero />
     </main>
   );
 }
