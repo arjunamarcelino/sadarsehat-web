@@ -17,6 +17,7 @@ export default function Navbar() {
   const [isScrollDown, setIsScrollDown] = useState(false);
   const scrolledY = useRef(0);
   const SCROLL_OFFSET = 100;
+  const router = useRouter();
 
   // ✅ Scroll hide/show logic
   useEffect(() => {
@@ -77,6 +78,7 @@ export default function Navbar() {
                     variant={ButtonVariant.Primary}
                     size={ButtonSize.Small}
                     className="ring-emerald-health hover:ring-emerald-health/80 h-[36px] w-[100px] font-semibold ring-2"
+                    onClick={() => router.push("/verifikasi-hoaks")}
                   >
                     Cek Hoaks
                   </Button>
@@ -121,6 +123,10 @@ export default function Navbar() {
                   variant={ButtonVariant.Primary}
                   size={ButtonSize.Small}
                   className="ring-emerald-health hover:ring-emerald-health/80 h-[40px] flex-1 text-[13px] font-semibold ring-2"
+                  onClick={() => {
+                    router.push("/verifikasi-hoaks");
+                    setMenuOpen(false);
+                  }}
                 >
                   Cek Hoaks
                 </Button>
@@ -147,9 +153,11 @@ function NavigationMenu({
   const lenis = useLenis();
   const router = useRouter();
 
-  const [activeIndex, setActiveIndex] = useState(() => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(() => {
+    // Only active on base route with hash
+    if (pathname !== "/") return null;
     const idx = NAVIGATION_MENU.findIndex((m) => pathname.endsWith(m.href));
-    return idx >= 0 ? idx : 0;
+    return idx >= 0 ? idx : null;
   });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
@@ -170,12 +178,24 @@ function NavigationMenu({
   const measure = () => {
     const isHovering = hoveredIndex !== null;
     const isHoveringActive = isHovering && hoveredIndex === activeIndex;
+    
+    // If no active index and not hovering, hide bgStyle
+    if (activeIndex === null && !isHovering) {
+      setBgStyle(null);
+      return;
+    }
+    
     const el = isHoveringActive
-      ? buttonRefs.current[hoveredIndex]
+      ? buttonRefs.current[hoveredIndex!]
       : isHovering
         ? textRefs.current[hoveredIndex!]
-        : buttonRefs.current[activeIndex];
-    if (!el || !navRef.current) return;
+        : activeIndex !== null
+          ? buttonRefs.current[activeIndex]
+          : null;
+    if (!el || !navRef.current) {
+      setBgStyle(null);
+      return;
+    }
 
     const parentRect = navRef.current.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
@@ -200,19 +220,26 @@ function NavigationMenu({
   const activeSection = useScrollSpy(sectionIds);
 
   useEffect(() => {
+    // Only update active index if on base route
+    if (pathname !== "/") {
+      setActiveIndex(null);
+      return;
+    }
     if (activeSection) {
       const idx = NAVIGATION_MENU.findIndex((m) => m.href === `#${activeSection}`);
       if (idx !== -1) setActiveIndex(idx);
     }
-  }, [activeSection]);
+  }, [activeSection, pathname]);
 
   useEffect(() => {
+    // Only update URL hash if on base route
+    if (pathname !== "/") return;
     if (!activeSection) return;
     const newUrl = `#${activeSection}`;
     if (window.location.hash !== newUrl) {
       window.history.replaceState(null, "", newUrl);
     }
-  }, [activeSection]);
+  }, [activeSection, pathname]);
 
   const handleClick = (i: number, href: string) => {
     setPendingIndex(i);
@@ -246,7 +273,7 @@ function NavigationMenu({
       )}
 
       {NAVIGATION_MENU.map((menu, i) => {
-        const isActive = activeIndex === i;
+        const isActive = activeIndex === i && pathname === "/";
         const isHovered = hoveredIndex === i;
         const isDotVisible = isActive || pendingIndex === i;
 
@@ -286,13 +313,17 @@ function NavigationMenu({
    Mobile Navigation Menu
 ================================ */
 function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const pathname = usePathname();
+  const [activeIndex, setActiveIndex] = useState<number | null>(() => {
+    // Only active on base route with hash
+    if (pathname !== "/") return null;
+    return null; // Start with no active item
+  });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const navRef = useRef<HTMLDivElement | null>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [bgStyle, setBgStyle] = useState<{ top: number; height: number } | null>(null);
   const lenis = useLenis();
-  const currentIndex = hoveredIndex ?? activeIndex;
   const router = useRouter();
 
   const setBtnRef = (i: number) => (el: HTMLButtonElement | null) => {
@@ -300,8 +331,18 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   const measure = () => {
+    // If no active index and not hovering, hide bgStyle
+    if (activeIndex === null && hoveredIndex === null) {
+      setBgStyle(null);
+      return;
+    }
+    
+    const currentIndex = hoveredIndex ?? activeIndex ?? 0;
     const el = buttonRefs.current[currentIndex];
-    if (!el || !navRef.current) return;
+    if (!el || !navRef.current) {
+      setBgStyle(null);
+      return;
+    }
     const parentRect = navRef.current.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
     setBgStyle({ top: rect.top - parentRect.top, height: rect.height });
@@ -316,25 +357,32 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
       resizeObs.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [currentIndex, activeIndex, hoveredIndex]);
+  }, [activeIndex, hoveredIndex]);
 
   const sectionIds = NAVIGATION_MENU.map((m) => m.href.replace("#", ""));
   const activeSection = useScrollSpy(sectionIds);
 
   useEffect(() => {
+    // Only update active index if on base route
+    if (pathname !== "/") {
+      setActiveIndex(null);
+      return;
+    }
     if (activeSection) {
       const idx = NAVIGATION_MENU.findIndex((m) => m.href === `#${activeSection}`);
       if (idx !== -1) setActiveIndex(idx);
     }
-  }, [activeSection]);
+  }, [activeSection, pathname]);
 
   useEffect(() => {
+    // Only update URL hash if on base route
+    if (pathname !== "/") return;
     if (!activeSection) return;
     const newUrl = `#${activeSection}`;
     if (window.location.hash !== newUrl) {
       window.history.replaceState(null, "", newUrl);
     }
-  }, [activeSection]);
+  }, [activeSection, pathname]);
 
   const handleClick = (i: number, href: string) => {
     setActiveIndex(i);
@@ -366,7 +414,7 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
       )}
 
       {NAVIGATION_MENU.map((menu, i) => {
-        const isActive = activeIndex === i;
+        const isActive = activeIndex === i && pathname === "/";
         const isHovered = hoveredIndex === i;
         const isHighlighted = isActive || isHovered;
 

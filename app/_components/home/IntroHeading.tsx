@@ -3,8 +3,10 @@
 import { ArrowRight } from "lucide-react";
 import Button, { ButtonSize, ButtonContent, ButtonVariant } from "../ui/Button";
 import { ShinyBadge } from "@/app/_components/ui/ShinyBadge";
+import { useRouter } from "next/navigation";
 
 export function IntroHeading() {
+  const router = useRouter();
   return (
     <div className="flex w-full flex-col items-start">
       {/* TAGLINE */}
@@ -39,6 +41,7 @@ export function IntroHeading() {
           </span>
         }
         className="group h-10 text-sm font-semibold sm:h-10 sm:text-sm lg:h-[50px] lg:text-base"
+        onClick={() => router.push("/verifikasi-hoaks")}
       >
         Cek Hoaks Sekarang
       </Button>

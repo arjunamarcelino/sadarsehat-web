@@ -4,9 +4,11 @@ import Image from "next/image";
 import Button, { ButtonContent, ButtonSize, ButtonVariant } from "../ui/Button";
 import { ArrowRight } from "lucide-react";
 import { useMediaQuery } from "@/app/_hooks/useMediaQuery";
+import { useRouter } from "next/navigation";
 
 export default function SadarSehatCTA() {
   const isLarge = useMediaQuery("(min-width: 1380px)");
+  const router = useRouter();
 
   return (
     <section className="relative w-full overflow-hidden bg-white py-25">
@@ -64,6 +66,7 @@ export default function SadarSehatCTA() {
                 variant={ButtonVariant.Primary}
                 rightIcon={<ArrowRight className="h-3.5 w-3.5 text-white" />}
                 className="group w-fit h-10 text-sm font-semibold sm:h-10 sm:text-sm lg:h-[50px] lg:text-base"
+                onClick={() => router.push("/verifikasi-hoaks")}
               >
                 Cek Hoaks Sekarang
               </Button>
