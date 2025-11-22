@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import Image from "next/image";
 import { motion, easeInOut } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ChevronDown } from "lucide-react";
 import Button, { ButtonSize, ButtonVariant } from "@/app/_components/ui/Button";
 import { usePathname, useRouter } from "next/navigation";
 import { useMediaQuery } from "@/app/_hooks/useMediaQuery";
@@ -162,6 +162,9 @@ function NavigationMenu({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const [bgStyle, setBgStyle] = useState<{ left: number; width: number } | null>(null);
+  const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
+  const dropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const navRef = useRef<HTMLDivElement | null>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -185,13 +188,20 @@ function NavigationMenu({
       return;
     }
     
-    const el = isHoveringActive
-      ? buttonRefs.current[hoveredIndex!]
-      : isHovering
-        ? textRefs.current[hoveredIndex!]
-        : activeIndex !== null
-          ? buttonRefs.current[activeIndex]
-          : null;
+    const currentIdx = hoveredIndex ?? activeIndex;
+    const hasSubmenu = currentIdx !== null && NAVIGATION_MENU[currentIdx]?.submenu;
+    
+    // For menus with submenu, always use buttonRefs to include icon width
+    // For other menus, use textRefs when hovering (for expand effect) or buttonRefs when active
+    const el = hasSubmenu
+      ? buttonRefs.current[currentIdx!]
+      : isHoveringActive
+        ? buttonRefs.current[hoveredIndex!]
+        : isHovering
+          ? textRefs.current[hoveredIndex!]
+          : activeIndex !== null
+            ? buttonRefs.current[activeIndex]
+            : null;
     if (!el || !navRef.current) {
       setBgStyle(null);
       return;
@@ -199,9 +209,11 @@ function NavigationMenu({
 
     const parentRect = navRef.current.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
-    const expand = isHovering && !isHoveringActive ? 36 : 0;
+    const expand = isHovering && !isHoveringActive && !hasSubmenu ? 36 : 0;
+    // Add extra width for menus with submenu to accommodate icon (20px for icon + spacing)
+    const iconPadding = hasSubmenu ? 5 : 0;
     const left = rect.left - parentRect.left - expand / 2;
-    const width = rect.width + expand;
+    const width = rect.width + expand + iconPadding;
     setBgStyle({ left, width });
   };
 
@@ -241,7 +253,18 @@ function NavigationMenu({
     }
   }, [activeSection, pathname]);
 
-  const handleClick = (i: number, href: string) => {
+  const handleClick = (i: number, href: string, menu: typeof NAVIGATION_MENU[0]) => {
+    // If menu has submenu, keep dropdown open (hover already handles opening)
+    if (menu.submenu) {
+      // Clear any pending close timeout
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      setOpenDropdownIndex(i);
+      return;
+    }
+
     setPendingIndex(i);
 
     if (href.startsWith("#") && window.location.pathname !== "/") {
@@ -255,6 +278,47 @@ function NavigationMenu({
       lenis?.scrollTo(href);
     }, 150);
   };
+
+  const handleSubmenuClick = (href: string) => {
+    setOpenDropdownIndex(null);
+    if (href.startsWith("/")) {
+      router.push(href);
+    } else if (href.startsWith("#")) {
+      if (window.location.pathname !== "/") {
+        router.push(`/${href}`);
+      } else {
+        lenis?.scrollTo(href);
+      }
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const clickedOutside = dropdownRefs.current.every(
+        (ref) => ref && !ref.contains(event.target as Node)
+      );
+      if (clickedOutside) {
+        // Clear any pending timeout
+        if (closeTimeoutRef.current) {
+          clearTimeout(closeTimeoutRef.current);
+          closeTimeoutRef.current = null;
+        }
+        setOpenDropdownIndex(null);
+        setHoveredIndex(null);
+      }
+    };
+
+    if (openDropdownIndex !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        if (closeTimeoutRef.current) {
+          clearTimeout(closeTimeoutRef.current);
+        }
+      };
+    }
+  }, [openDropdownIndex]);
 
   return (
     <div
@@ -276,33 +340,110 @@ function NavigationMenu({
         const isActive = activeIndex === i && pathname === "/";
         const isHovered = hoveredIndex === i;
         const isDotVisible = isActive || pendingIndex === i;
+        const hasSubmenu = !!menu.submenu;
+        const isDropdownOpen = openDropdownIndex === i;
 
         return (
-          <button
+          <div
             key={menu.href}
-            ref={setBtnRef(i)}
-            onClick={() => handleClick(i, menu.href)}
-            onMouseEnter={() => setHoveredIndex(i)}
-            onMouseLeave={() => setHoveredIndex(null)}
-            className={cn(
-              "font-heading relative z-10 flex h-[44px] items-center px-4 text-sm font-semibold transition-colors duration-150 max-md:text-xs",
-              itemClassName,
-              isActive || isHovered ? "text-emerald-health" : "text-teal-deep",
-            )}
+            ref={(el) => {
+              if (hasSubmenu) dropdownRefs.current[i] = el;
+            }}
+            className="relative"
+            onMouseEnter={() => {
+              if (hasSubmenu) {
+                // Clear any pending close timeout
+                if (closeTimeoutRef.current) {
+                  clearTimeout(closeTimeoutRef.current);
+                  closeTimeoutRef.current = null;
+                }
+                setHoveredIndex(i);
+                setOpenDropdownIndex(i);
+              }
+            }}
+            onMouseLeave={() => {
+              if (hasSubmenu) {
+                setHoveredIndex(null);
+                // Delay closing to allow moving to dropdown
+                closeTimeoutRef.current = setTimeout(() => {
+                  setOpenDropdownIndex(null);
+                }, 200);
+              }
+            }}
           >
-            <span className="mr-[5.5px] inline-flex h-[6px] w-[6px] items-center justify-center">
-              <motion.span
-                className="h-[6px] w-[6px] rounded-full"
-                style={{ backgroundColor: "var(--color-emerald-health, #0BB586)" }}
-                animate={{
-                  scale: isDotVisible ? 1 : 0,
-                  opacity: isDotVisible ? 1 : 0,
+            <button
+              ref={setBtnRef(i)}
+              onClick={() => handleClick(i, menu.href, menu)}
+              onMouseEnter={() => !hasSubmenu && setHoveredIndex(i)}
+              onMouseLeave={() => !hasSubmenu && setHoveredIndex(null)}
+              className={cn(
+                "font-heading relative z-10 flex h-[44px] items-center text-sm font-semibold transition-colors duration-150 max-md:text-xs px-4",
+                itemClassName,
+                isActive || isHovered ? "text-emerald-health" : "text-teal-deep",
+              )}
+            >
+              <span className="mr-[5.5px] inline-flex h-[6px] w-[6px] items-center justify-center">
+                <motion.span
+                  className="h-[6px] w-[6px] rounded-full"
+                  style={{ backgroundColor: "var(--color-emerald-health, #0BB586)" }}
+                  animate={{
+                    scale: isDotVisible ? 1 : 0,
+                    opacity: isDotVisible ? 1 : 0,
+                  }}
+                  transition={{ duration: 0.15, ease: easeInOut }}
+                />
+              </span>
+              <span ref={setTextRef(i)}>{menu.label}</span>
+              {hasSubmenu && (
+                <ChevronDown
+                  size={16}
+                  className={cn(
+                    "ml-2 transition-transform duration-200",
+                    isDropdownOpen && "rotate-180"
+                  )}
+                />
+              )}
+            </button>
+
+            {/* Dropdown Menu */}
+            {hasSubmenu && isDropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2, ease: easeInOut }}
+                className="absolute top-full left-1/2 z-50 mt-2 w-[200px] -translate-x-1/2 rounded-xl border border-soft-mint bg-white shadow-xl"
+                onMouseEnter={() => {
+                  // Clear any pending close timeout
+                  if (closeTimeoutRef.current) {
+                    clearTimeout(closeTimeoutRef.current);
+                    closeTimeoutRef.current = null;
+                  }
+                  setHoveredIndex(i);
+                  setOpenDropdownIndex(i);
                 }}
-                transition={{ duration: 0.15, ease: easeInOut }}
-              />
-            </span>
-            <span ref={setTextRef(i)}>{menu.label}</span>
-          </button>
+                onMouseLeave={() => {
+                  setHoveredIndex(null);
+                  // Delay closing to allow moving back to button
+                  closeTimeoutRef.current = setTimeout(() => {
+                    setOpenDropdownIndex(null);
+                  }, 200);
+                }}
+              >
+                <div className="py-2">
+                  {menu.submenu?.map((subItem, subIdx) => (
+                    <button
+                      key={subIdx}
+                      onClick={() => handleSubmenuClick(subItem.href)}
+                      className="font-heading w-full px-4 py-2.5 text-left text-sm font-semibold text-teal-deep transition-colors hover:bg-soft-mint hover:text-emerald-health"
+                    >
+                      {subItem.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
         );
       })}
     </div>
@@ -320,6 +461,7 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
     return null; // Start with no active item
   });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
   const navRef = useRef<HTMLDivElement | null>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [bgStyle, setBgStyle] = useState<{ top: number; height: number } | null>(null);
@@ -384,16 +526,37 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
     }
   }, [activeSection, pathname]);
 
-  const handleClick = (i: number, href: string) => {
+  const handleClick = (i: number, href: string, menu: typeof NAVIGATION_MENU[0]) => {
+    // If menu has submenu, toggle dropdown instead of navigating
+    if (menu.submenu) {
+      setOpenDropdownIndex(openDropdownIndex === i ? null : i);
+      return;
+    }
+
     setActiveIndex(i);
     setHoveredIndex(null);
 
     if (href.startsWith("#") && window.location.pathname !== "/") {
       router.push(`/${href}`);
+      onNavigate?.();
       return;
     }
 
     lenis?.scrollTo(href);
+    onNavigate?.();
+  };
+
+  const handleSubmenuClick = (href: string) => {
+    setOpenDropdownIndex(null);
+    if (href.startsWith("/")) {
+      router.push(href);
+    } else if (href.startsWith("#")) {
+      if (window.location.pathname !== "/") {
+        router.push(`/${href}`);
+      } else {
+        lenis?.scrollTo(href);
+      }
+    }
     onNavigate?.();
   };
 
@@ -417,32 +580,67 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
         const isActive = activeIndex === i && pathname === "/";
         const isHovered = hoveredIndex === i;
         const isHighlighted = isActive || isHovered;
+        const hasSubmenu = !!menu.submenu;
+        const isDropdownOpen = openDropdownIndex === i;
 
         return (
-          <button
-            key={menu.href}
-            ref={setBtnRef(i)}
-            onClick={() => handleClick(i, menu.href)}
-            onMouseEnter={() => setHoveredIndex(i)}
-            onMouseLeave={() => setHoveredIndex(null)}
-            className={cn(
-              "font-heading relative z-10 flex w-full items-center justify-center rounded-lg py-3 text-[15px] font-semibold transition-colors duration-150",
-              isHighlighted ? "text-emerald-health" : "text-teal-deep",
+          <div key={menu.href} className="w-full">
+            <button
+              ref={setBtnRef(i)}
+              onClick={() => handleClick(i, menu.href, menu)}
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
+              className={cn(
+                "font-heading relative z-10 flex w-full items-center justify-center rounded-lg py-3 text-[15px] font-semibold transition-colors duration-150",
+                isHighlighted ? "text-emerald-health" : "text-teal-deep",
+              )}
+            >
+              <span className="mr-[5.5px] inline-flex h-[6px] w-[6px] items-center justify-center">
+                <motion.span
+                  className="h-[6px] w-[6px] rounded-full"
+                  style={{ backgroundColor: "var(--color-emerald-health, #0BB586)" }}
+                  animate={{
+                    scale: isActive ? 1 : 0,
+                    opacity: isActive ? 1 : 0,
+                  }}
+                  transition={{ duration: 0.15, ease: easeInOut }}
+                />
+              </span>
+              {menu.label}
+              {hasSubmenu && (
+                <ChevronDown
+                  size={16}
+                  className={cn(
+                    "ml-2 transition-transform duration-200",
+                    isDropdownOpen && "rotate-180"
+                  )}
+                />
+              )}
+            </button>
+
+            {/* Mobile Submenu */}
+            {hasSubmenu && isDropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2, ease: easeInOut }}
+                className="overflow-hidden"
+              >
+                <div className="ml-6 mt-2 space-y-1 border-l-2 border-soft-mint pl-4">
+                  {menu.submenu?.map((subItem, subIdx) => (
+                    <button
+                      key={subIdx}
+                      onClick={() => handleSubmenuClick(subItem.href)}
+                      className="font-heading w-full text-left text-sm font-medium text-teal-deep transition-colors hover:text-emerald-health"
+                    >
+                      {subItem.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
             )}
-          >
-            <span className="mr-[5.5px] inline-flex h-[6px] w-[6px] items-center justify-center">
-              <motion.span
-                className="h-[6px] w-[6px] rounded-full"
-                style={{ backgroundColor: "var(--color-emerald-health, #0BB586)" }}
-                animate={{
-                  scale: isActive ? 1 : 0,
-                  opacity: isActive ? 1 : 0,
-                }}
-                transition={{ duration: 0.15, ease: easeInOut }}
-              />
-            </span>
-            {menu.label}
-          </button>
+          </div>
         );
       })}
     </div>
@@ -451,6 +649,15 @@ function MobileNavigationMenu({ onNavigate }: { onNavigate?: () => void }) {
 
 const NAVIGATION_MENU = [
   { label: "Beranda", href: "#intro" },
+  { 
+    label: "Produk", 
+    href: "#produk",
+    submenu: [
+      { label: "Verifikasi Hoax", href: "/verifikasi-hoaks" },
+      { label: "Kuis", href: "/kuis" },
+      { label: "Dashboard Analitik", href: "/dashboard-analitik" },
+    ]
+  },
   { label: "Tentang Kami", href: "#about-us" },
   { label: "Cara Kerja", href: "#how-it-works" },
   { label: "Kontak", href: "#contact" },
